@@ -1,0 +1,573 @@
+---
+title: "Zadanie projektowe w grupie - Zadania Tomasz Nowak"
+output: html_document
+date: "2023-06-06"
+---
+# Wstęp
+## Poniżej opisuję moje wykonane zadania w tym projekcie. Podzieliłem się z kompanem Rafałem Patrzałkiem na kilka zadań, aby przeanalizować problematykę przestępczości w NYC.
+
+Zadania:
+
+Tomasz:\n
+- Skategoryzowanie zarzutów, wyłonienie która grupa demograficzna popełnia najwięcej danych przestępstw,\n
+- Monotoniczość przestępczości w poszczególnych latach, dla danej kategorii,\n
+- Czy istnieją konkretne dni roku z wysoką przestępczością?\n
+- Mapa (jak nakładać współrzędne geograficzne).\n
+
+
+# Kategoryzacja danych - Zadanie 1
+## Import danych wraz z kategoryzacją
+
+W tym chunku importuję oraz kategoryzuje przestępstwa. Wedle wybranej przezemnie listy:
+- Przestępstwa narkotykowe\n
+- Kradzieże\n
+- Morderstwa\n
+
+```{r} 
+# Z początku wczytujemy same dane. (Skąd je wziąć? - Przeczytaj README.md)
+library(readr)
+NYC_crimes = read_csv("NYPD_Arrests_Data__Historic_.csv")
+print(unique(NYC_crimes$OFNS_DESC))
+View(NYC_crimes)
+
+# Stworzenie ramki danych kategoryzującej przestępstwa związane z narkotykami.
+drug_crimes = NYC_crimes[NYC_crimes$OFNS_DESC == "DANGEROUS DRUGS" |
+                          NYC_crimes$OFNS_DESC == "UNDER THE INFLUENCE, DRUGS"  |
+                          NYC_crimes$OFNS_DESC == "LOITERING FOR DRUG PURPOSES",
+                         ]
+# Czyszczenie danych z wartości NA
+drug_crimes = drug_crimes[complete.cases(drug_crimes$PERP_RACE), ]
+
+
+# Stworzenie ramki danych kategoryzującej włamania, wszelakiego rodzaju próby kradzieży w dużym ogóle wszelkich przestępstw z motywem wzbogacenia się dla oskarżonego.
+burglary_crimes = NYC_crimes[NYC_crimes$OFNS_DESC == "BURGLARY" |
+                               NYC_crimes$OFNS_DESC == "ROBBERY" | 
+                               NYC_crimes$OFNS_DESC == "POSSESSION OF STOLEN PROPERTY 5" |
+                               NYC_crimes$OFNS_DESC == "GRAND LARCENY OF MOTOR VEHICLE" |
+                               NYC_crimes$OFNS_DESC == "FRAUDULENT ACCOSTING" |
+                               NYC_crimes$OFNS_DESC == "OTHER OFFENSES RELATED TO THEFT" |
+                               NYC_crimes$OFNS_DESC == "FORGERY" |
+                               NYC_crimes$OFNS_DESC == "FRAUDS" |
+                               NYC_crimes$OFNS_DESC == "OFFENSES INVOLVING FRAUD" |
+                               NYC_crimes$OFNS_DESC == "GRAND LARCENY" |
+                               NYC_crimes$OFNS_DESC == "BURGLAR'S TOOLS" |
+                               NYC_crimes$OFNS_DESC == "THEFT-FRAUD" |
+                               NYC_crimes$OFNS_DESC == "PETIT LARCENY" |
+                               NYC_crimes$OFNS_DESC == "ASSAULT 3 & RELATED OFFENSES" |
+                               NYC_crimes$OFNS_DESC == "ASSAULT"
+                             ,
+                             ]
+# Czyszczenie danych z wartości NA
+burglary_crimes = burglary_crimes[complete.cases(burglary_crimes$PERP_RACE), ]
+
+
+# Stworzenie ramki danych kategoryzującej morderstwa.
+murder_crimes = NYC_crimes[NYC_crimes$OFNS_DESC == "MURDER & NON-NEGL. MANSLAUGHTER" | 
+                            NYC_crimes$OFNS_DESC == "MURDER & NON-NEGL. MANSLAUGHTE" | 
+                            NYC_crimes$OFNS_DESC == "HOMICIDE-NEGLIGENT-VEHICLE" | 
+                            NYC_crimes$OFNS_DESC == "CRIMINAL MISCHIEF & RELATED OF" |
+                            NYC_crimes$OFNS_DESC == "HOMICIDE-NEGLIGENT,UNCLASSIFIED" |
+                            NYC_crimes$OFNS_DESC == "CRIMINAL TRESPASS" |
+                            NYC_crimes$OFNS_DESC == "FELONY ASSAULT" |
+                            NYC_crimes$OFNS_DESC == "CRIMINAL TRESPASS" 
+                          ,
+                          ]
+# Czyszczenie ramki danych z wartości NA
+murder_crimes = murder_crimes[complete.cases(murder_crimes$PERP_RACE), ]
+
+
+
+```
+
+# Rysowanie wykresów i wyciąganie wniosków
+## Oskarżenia w kategorii: Narkotyki
+
+```{r}
+# ggPlot2
+#install.packages("ggplot2")
+library(ggplot2)
+ggplot(drug_crimes, aes(x = PERP_RACE)) +
+  geom_bar() +
+  labs(title = "Przestępstwa narkotykowe dla rasy człowieka", x = "Rasa", y = "Liczba") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+Z wykresu widać ogromną dominację osób czarnoskórych w przestępstwach narkotykowych.
+Postanawiam w tej chwili połączyć BLACK HISPANIC z WHITE HISPANIC, gdyż można ich wziąć za tą samą rasę "kartelu"
+
+```{R}
+hispanic_vector_to_modify = c("WHITE HISPANIC", "BLACK HISPANIC")
+drug_crimes_cartel = drug_crimes
+drug_crimes_cartel$PERP_RACE[drug_crimes_cartel$PERP_RACE %in% hispanic_vector_to_modify] = "HISPANIC"
+
+# Mało znaczące w danych rasy połączyłem razem.
+insignificant_vector_to_modify = c("ASIAN / PACIFIC ISLANDER",
+                                   "OTHER",
+                                   "UNKNOWN",
+                                   "NA",
+                                   NA,
+                                   "AMERICAN INDIAN/ALASKAN NATIVE"
+                                   )
+drug_crimes_cartel$PERP_RACE[drug_crimes_cartel$PERP_RACE %in% insignificant_vector_to_modify] = "INSIGNIFICANT"
+
+ggplot(drug_crimes_cartel, aes(x = PERP_RACE)) +
+  geom_bar() +
+  labs(title = "Przestępstwa narkotykowe dla rasy człowieka (Połączenie hiszpanów)", x = "Rasa", y = "Liczba") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+```
+
+Połączenie ciemnych/jasnych hiszpanów w jedną rasę zwizualizowało nam to, iż skala problemu nie dominuje tylko wsród osób czarnoskórych,
+Widać też dużo bardziej udział osób białoskórych którzy też święci nie są.
+
+## Oskarżenia w kategorii: Kradzieży
+Zasada działania kodu właściwie będzie taka sama. Tylko podmienimy naszą ramkę danych.
+
+```{r}
+
+library(ggplot2)
+ggplot(burglary_crimes, aes(x = PERP_RACE)) +
+  geom_bar() +
+  labs(title = "Przestępstwa 'kradzieżowe' dla rasy człowieka", x = "Rasa", y = "Liczba") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+Jak możemy zauwazyć urosła znacznie kolumna z Azjatami :)
+Ponownie chciałbym połączyć rasy lecz tym razem z uwzględnieniem skośnookich
+
+```{r}
+
+hispanic_vector_to_modify = c("WHITE HISPANIC", "BLACK HISPANIC")
+burgral_crimes_connected = drug_crimes
+burgral_crimes_connected$PERP_RACE[burgral_crimes_connected$PERP_RACE %in% hispanic_vector_to_modify] = "HISPANIC"
+
+insignificant_vector_to_modify = c(
+                                   "OTHER",
+                                   "UNKNOWN",
+                                   "NA",
+                                   NA,
+                                   "AMERICAN INDIAN/ALASKAN NATIVE"
+                                   )
+burgral_crimes_connected$PERP_RACE[burgral_crimes_connected$PERP_RACE %in% insignificant_vector_to_modify] = "INSIGNIFICANT"
+
+ggplot(burgral_crimes_connected, aes(x = PERP_RACE)) +
+  geom_bar() +
+  labs(title = "Przestępstwa kradzieżowe dla rasy człowieka (Połączenie hiszpanów)", x = "Rasa", y = "Liczba") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+
+```
+
+## Oskarżenia w kategorii morderstw
+Teraz zwizualizujemy sobie dataframe odnośnie zabójstw.
+
+```{r}
+
+ggplot(murder_crimes, aes(x = PERP_RACE)) +
+  geom_bar() +
+  labs(title = "Przestępstwa w kategorii morderstw dla rasy człowieka", x = "Rasa", y = "Liczba") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+```
+
+Ponownie połączmy grupy hiszpanów.
+
+```{r}
+
+hispanic_vector_to_modify = c("WHITE HISPANIC", "BLACK HISPANIC")
+murder_crimes_connected = murder_crimes
+murder_crimes_connected$PERP_RACE[murder_crimes_connected$PERP_RACE %in% hispanic_vector_to_modify] = "HISPANIC"
+
+insignificant_vector_to_modify = c(
+                                   "OTHER",
+                                   "UNKNOWN",
+                                   "NA",
+                                   NA,
+                                   "AMERICAN INDIAN/ALASKAN NATIVE"
+                                   )
+murder_crimes_connected$PERP_RACE[murder_crimes_connected$PERP_RACE %in% insignificant_vector_to_modify] = "INSIGNIFICANT"
+
+ggplot(murder_crimes_connected, aes(x = PERP_RACE)) +
+  geom_bar() +
+  labs(title = "Przestępstwa w kategorii morderstw dla rasy człowieka (Połączenie hiszpanów)", x = "Rasa", y = "Liczba") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+```
+
+Teraz zwizualizujemy sobie te wszystkie 3 kategorie na jednym wykresie.
+
+```{r}
+# Łączę wszystkie 3 ramki danych w jedną ale najpierw przypisuję sobie do każdej która należy do jakiej kategorii
+murder_crimes$CATEGORY = "MURDER"
+drug_crimes$CATEGORY = "DRUGS"
+burglary_crimes$CATEGORY = "BURGLARY"
+
+combined_crimes = rbind(murder_crimes, drug_crimes, burglary_crimes)
+
+# Agreguje dane aby je wrzucić do wykresu.
+combined_crimes_aggregate = aggregate(combined_crimes, by=list(Race=combined_crimes$PERP_RACE, Crime=combined_crimes$CATEGORY), FUN=length)
+
+colnames(combined_crimes_aggregate) = c("Race", "Crime", "Count")
+# print(combined_crimes_aggregate)
+
+```
+
+Wszystko "zadziałało" prawie tak jak powinno.
+Teraz zajmiemy się rysowaniem grafu.
+
+```{r}
+
+ggplot(combined_crimes_aggregate, aes(Crime, Count, fill = Race)) + geom_col(position = "dodge")
+
+```
+
+Wykres prezentuję się tak jak widać powyżej, chciałbym jeszcze połączyć rasę hiszpanów.
+
+```{r}
+
+hispanic_vector_to_modify = c("WHITE HISPANIC", "BLACK HISPANIC")
+combined_crimes_aggregate_connected = combined_crimes_aggregate
+combined_crimes_aggregate_connected$Race[combined_crimes_aggregate_connected$Race %in% hispanic_vector_to_modify] = "HISPANIC"
+
+
+ggplot(combined_crimes_aggregate_connected, aes(Crime, Count, fill = Race)) + geom_col(position = "dodge")
+
+```
+
+Mamy teraz porównanie co do każdej kategorii ilość wykonanych przestępstw przez daną rasę.
+
+
+# Zadanie 2 Monotoniczość przestępczości w poszczególnych latach, dla danej kategorii,
+
+Dobrze przechodząc odrazu do tematu mając już powyższe skategoryzowane dane jak i również połączone ze sobą w ramce danych "combined_crimes"
+możemy zająć się badaniem monotoniczności przestępczości w danych latach.
+
+## Sprawdzenie monotoniczności kategorii morderstw w NYC
+
+```{r}
+
+
+print(combined_crimes)
+
+# Agreguje dane aby je wrzucić do wykresu.
+print(murder_crimes)
+
+murder_crimes_monotonic = murder_crimes
+murder_crimes_monotonic_aggregate = aggregate(murder_crimes_monotonic, by=list(Date= murder_crimes_monotonic$ARREST_DATE), FUN=length)
+
+
+colnames(murder_crimes_monotonic_aggregate) <- c("Date", "Count")
+# print(murder_crimes_monotonic_aggregate)
+# Segregacja wedle daty
+murder_crimes_monotonic_aggregate = murder_crimes_monotonic_aggregate[order(murder_crimes_monotonic_aggregate$Date), ]
+
+
+# ggplot(murder_crimes_monotonic_aggregate, aes(x = Date, y = Count, group=1)) +
+#  geom_line() +
+#  labs(x = "Date", y = "Murder crime count") +
+#  ggtitle("Monotonic Plot of murder crimes per day")
+
+
+library(lubridate)
+# Zamiana daty z DD/MM/YYYY na YYYY-MM-DD, ggplot inaczej nie potrafił stworzyć plota.
+murder_crimes_monotonic_aggregate$Date = dmy(murder_crimes_monotonic_aggregate$Date)
+# print(murder_crimes_monotonic_aggregate)
+
+ggplot(murder_crimes_monotonic_aggregate, aes(x = Date, y = Count, color = as.factor(format(Date, "%Y")))) +
+  geom_line() +
+  labs(x = "Date", y = "Murder crimes per day", color = "Year") +
+  ggtitle("Monotonic of murder crimes per day over 2006-2017 in NYC") +
+  scale_x_date(date_labels = "%Y", date_breaks = "1 year")
+
+
+# wykresy typu time series
+
+```
+
+Tak prezentuje się wykres popełnionych przestępstw w kategorii morderstw.
+
+## Sprawdzenie monotoniczności kategorii kradzieży w NYC
+```{r}
+
+# Agreguje dane aby je wrzucić do wykresu.
+
+burglary_crimes_monotonic = burglary_crimes
+burglary_crimes_monotonic_aggregate = aggregate(burglary_crimes_monotonic, by=list(Date= burglary_crimes_monotonic$ARREST_DATE), FUN=length)
+
+
+colnames(burglary_crimes_monotonic_aggregate) <- c("Date", "Count")
+# print(murder_crimes_monotonic_aggregate)
+# Segregacja wedle daty
+burglary_crimes_monotonic_aggregate = burglary_crimes_monotonic_aggregate[order(burglary_crimes_monotonic_aggregate$Date), ]
+
+
+# library(lubridate)
+burglary_crimes_monotonic_aggregate$Date = dmy(burglary_crimes_monotonic_aggregate$Date)
+# print(burglary_crimes_monotonic_aggregate)
+
+ggplot(burglary_crimes_monotonic_aggregate, aes(x = Date, y = Count, color = as.factor(format(Date, "%Y")))) +
+  geom_line() +
+  labs(x = "Date", y = "Burglary crimes per day", color = "Year") +
+  ggtitle("Burglary crimes per day over 2006-2017 in NYC") +
+  scale_x_date(date_labels = "%Y", date_breaks = "1 year")
+
+```
+
+Jak widzimy, kradzieże nie maleją tak szybko jak przestępczość morderstw
+
+## Sprawdzanie monotoniczności kategorii narkotykowej
+
+```{r}
+
+drug_crimes_monotonic = drug_crimes
+drug_crimes_monotonic_aggregate = aggregate(drug_crimes_monotonic, by=list(Date=drug_crimes_monotonic$ARREST_DATE), FUN=length)
+
+
+colnames(drug_crimes_monotonic_aggregate) <- c("Date", "Count")
+# Segregacja wedle daty
+drug_crimes_monotonic_aggregate = drug_crimes_monotonic_aggregate[order(drug_crimes_monotonic_aggregate$Date), ]
+
+
+# library(lubridate)
+drug_crimes_monotonic_aggregate$Date = dmy(drug_crimes_monotonic_aggregate$Date)
+# print(drug_crimes_monotonic_aggregate)
+
+ggplot(drug_crimes_monotonic_aggregate, aes(x = Date, y = Count, color = as.factor(format(Date, "%Y")))) +
+  geom_line() +
+  labs(x = "Date", y = "Drug crimes per day", color = "Year") +
+  ggtitle("Monotonic of drug crimes per day over 2006-2017 in NYC") +
+  scale_x_date(date_labels = "%Y", date_breaks = "1 year")
+
+
+```
+
+Przestępstwa z narkotykami drastycznie maleją w przeciagu kilkunastu lat.
+
+# Zadanie 3 Jakie są konkretne dni roku z najwyższą przestępczością dla każdej z kategorii?
+## Najwyższa liczba przestępstw w konkretnych dniach w kategorii: Narkotyki
+
+Użyjemy do tego poprzednich ramek danych, które już udało mi się wcześniej zagregować
+
+```{r}
+
+# To są nasze ramki danych zagregowane do ilości dziennych wystapień danego przestępstwa, teraz bedzięmy szukać dla każdego roku maksymalną liczbę wystapień z każdej kategorii.
+
+# drug_crimes_monotonic_aggregate
+# murder_crimes_monotonic_aggregate
+# burglary_crimes_monotonic_aggregate
+
+# Tworzymy kolumnę Year i dajemy do niej konkretny rok każdego przestępstwa aby następnie znaleźć maksymalną wartość
+
+drug_crimes_monotonic_aggregate$Year = format(drug_crimes_monotonic_aggregate$Date, "%Y")
+
+drug_crimes_max_count_per_year <- aggregate(Count ~ Year, data = drug_crimes_monotonic_aggregate, FUN = max)
+print(drug_crimes_max_count_per_year)
+```
+Teraz gdy mamy maksymalne wystąpienia narkotykowych przestępstw możemy znaleźć dla każdego roku konkretną datę
+
+```{r}
+
+drug_max_count = c(drug_crimes_max_count_per_year$Count)
+drug_max_year = c(drug_crimes_max_count_per_year$Year)
+
+# Iteruję dla dwóch zmiennych.
+mapply(function(x_val, y_val) {
+  
+
+  # print(paste("x:", x_val, "y:", y_val))
+  temp = drug_crimes_monotonic_aggregate[drug_crimes_monotonic_aggregate$Year == y_val &  drug_crimes_monotonic_aggregate$Count == x_val, ]
+  temp = na.omit(temp)
+  print(temp$Date[1])
+  
+}, drug_max_count, drug_max_year)
+
+# print(drug_crimes_monotonic_aggregate[drug_crimes_monotonic_aggregate$Year == "2006", ])
+
+```
+
+## Najwyższa liczba przestępstw w konkretnych dniach w kategorii: Kradzieże
+
+Kod właściwie będzie taki sam dla powyższej kategorii narkotyków.
+
+```{r}
+
+# Formatujemy datę aby ggplot nie miał problemu wyświetlić danych
+burglary_crimes_monotonic_aggregate$Year = format(burglary_crimes_monotonic_aggregate$Date, "%Y")
+
+burglary_crimes_max_count_per_year <- aggregate(Count ~ Year, data = burglary_crimes_monotonic_aggregate, FUN = max)
+print(burglary_crimes_max_count_per_year)
+
+```
+Teraz ponownie znajdziemy sobie dokładne daty dla kategorii kradzieży
+
+```{r}
+
+burglary_max_count = c(burglary_crimes_max_count_per_year$Count)
+burglary_max_year = c(burglary_crimes_max_count_per_year$Year)
+
+# Iteruję dla dwóch zmiennych.
+mapply(function(x_val, y_val) {
+  
+
+  # print(paste("x:", x_val, "y:", y_val))
+  temp = burglary_crimes_monotonic_aggregate[burglary_crimes_monotonic_aggregate$Year == y_val &
+                                               burglary_crimes_monotonic_aggregate$Count == x_val, ]
+  temp = na.omit(temp)
+  print(temp$Date[1])
+  
+}, burglary_max_count, burglary_max_year)
+
+
+```
+To są nasze konkretne daty dla każdego z roku w kategorii kradzieży :)
+
+
+## Dni z największą przestępczością w kategorii: Morderstwa
+
+Kod wyglądać będzie podobnie.
+```{r}
+
+
+murder_crimes_monotonic_aggregate$Year = format(murder_crimes_monotonic_aggregate$Date, "%Y")
+
+murder_crimes_max_count_per_year <- aggregate(Count ~ Year, data = murder_crimes_monotonic_aggregate, FUN = max)
+print(murder_crimes_max_count_per_year)
+
+```
+
+Ponownie szukamy konkretnych dni.
+
+```{r}
+
+murder_max_count = c(murder_crimes_max_count_per_year$Count)
+murder_max_year = c(murder_crimes_max_count_per_year$Year)
+
+# Iteruję dla dwóch zmiennych.
+mapply(function(x_val, y_val) {
+  
+
+  # print(paste("x:", x_val, "y:", y_val))
+  temp = murder_crimes_monotonic_aggregate[murder_crimes_monotonic_aggregate$Year == y_val &
+                                               murder_crimes_monotonic_aggregate$Count == x_val, ]
+  temp = na.omit(temp)
+  print(temp$Date[1])
+  
+}, murder_max_count, murder_max_year)
+
+
+```
+# Próba stworzenia mapy cieplnej NYC dla trzech kategorii.
+## Kategoria Narkotyków
+
+```{r}
+#install.packages("ggmap")
+
+library(ggplot2)
+library(ggmap)
+library(RColorBrewer)
+
+#install.packages("leaflet.extras")
+
+library(leaflet)
+library(leaflet.extras)
+library(dplyr)
+
+# Tworze zmienna coords i atrybut .data, przypisuje do niego ramke danych z Longitude i Latitude z drug_crimes
+coords.data = data.frame(drug_crimes$Latitude, drug_crimes$Longitude)
+
+colnames(coords.data) = c("Latitude", "Longitude")
+coords.data = na.omit(coords.data)
+
+# NYC
+map_nyc <- leaflet() %>%
+  setView(lng = -74.0060, lat = 40.7128, zoom = 11)
+
+# Heatmap
+map_nyc <- map_nyc %>%
+  addHeatmap(data = coords.data, lng = ~Longitude, lat = ~Latitude) %>%
+  addProviderTiles("OpenStreetMap.Mapnik")
+
+map_nyc
+
+
+```
+
+Mapa jest interaktywna.
+
+## Kategoria morderstw
+
+```{r}
+# Tworze zmienna coords i atrybut .data, przypisuje do niego ramke danych z Longitude i Latitude z murder_crimes
+coords.data = data.frame(murder_crimes$Latitude, murder_crimes$Longitude)
+
+colnames(coords.data) = c("Latitude", "Longitude")
+coords.data = na.omit(coords.data)
+
+# Mapa skoncentrowana wokół NYC
+map_nyc <- leaflet() %>%
+  setView(lng = -74.0060, lat = 40.7128, zoom = 11)
+
+# Dodawania HeatMapy oraz podmiana providera map (oryginalne nie działały)
+map_nyc <- map_nyc %>%
+  addHeatmap(data = coords.data, lng = ~Longitude, lat = ~Latitude) %>%
+  addProviderTiles("OpenStreetMap.Mapnik")
+
+map_nyc
+
+```
+
+
+## Kategoria kradzieży
+
+```{r}
+
+# Tworze zmienna coords i atrybut .data, przypisuje do niego ramke danych z Longitude i Latitude z burglary_crimes
+coords.data = data.frame(burglary_crimes$Latitude, burglary_crimes$Longitude)
+
+colnames(coords.data) = c("Latitude", "Longitude")
+coords.data = na.omit(coords.data)
+
+map_nyc <- leaflet() %>%
+  setView(lng = -74.0060, lat = 40.7128, zoom = 11)
+
+map_nyc <- map_nyc %>%
+  addHeatmap(data = coords.data, lng = ~Longitude, lat = ~Latitude) %>%
+  addProviderTiles("OpenStreetMap.Mapnik")
+
+map_nyc
+
+```
+
+
+## Teraz dla testu spróbuję stworzyć mapę ze zwykłymi znacznikami.
+
+```{r}
+
+
+# Tworze zmienna coords i atrybut .data, przypisuje do niego ramke danych z Longitude i Latitude z drug_crimes
+#coords.data = data.frame(drug_crimes$Latitude, drug_crimes$Longitude)
+
+#colnames(coords.data) = c("Latitude", "Longitude")
+#coords.data = na.omit(coords.data)
+
+#map_nyc <- leaflet() %>%
+#  setView(lng = -74.0060, lat = 40.7128, zoom = 11)
+
+#map_nyc <- map_nyc %>%
+#  addCircleMarkers(data = coords.data, lng = ~Longitude, lat = ~Latitude, radius = 10,
+#                   color = "red", fill = TRUE, fillOpacity = 0.8)
+
+
+# map_nyc
+
+
+```
+
+Niestety przez ilość danych mapa nie wczytuję się poprawnie.
+
